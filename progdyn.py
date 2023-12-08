@@ -1,8 +1,8 @@
+import heapq
 from osgeo import gdal
 import numpy as np
-import heapq
-import geopandas as gpd
 from scipy import signal
+import geopandas as gpd
 
 
 def calc_emprise(opi, start, end, marge):
@@ -12,17 +12,13 @@ def calc_emprise(opi, start, end, marge):
         marge = 2
     l, c = opi.shape[1], opi.shape[2]
     i_min = min(start[0], end[0]) - marge
+    i_min = max(i_min, 0)
     i_max = max(start[0], end[0]) + marge
+    i_max = min(i_max, l)
     j_min = min(start[1], end[1]) - marge
+    j_min = max(j_min, 0)
     j_max = max(start[1], end[1]) + marge
-    if i_min < 0:
-        i_min = 0
-    if j_min < 0:
-        j_min = 0
-    if i_max > l:
-        i_max = l
-    if j_max > c:
-        j_max = c
+    j_max = min(j_max, c)
     masque = np.ones((l, c))
     masque[:] = np.nan
     masque[i_min:i_max, j_min:j_max] = 1
@@ -172,7 +168,7 @@ def retour(cc, debut, fin):
     return solution, list_points_solution
 
 
-def calc_cheminement(opi, start, end, marge, lambda1, lambda2, tension, coutmin, name):
+def calc_cheminement(opi, start, end, marge, lambda1, lambda2, tension, coutmin):
     """ retourne le meilleur chemin entre les points start et end """
     opi_masque, masque = calc_emprise(opi, start, end, marge)
     couts_init = calc_cout_init(opi_masque, lambda1, lambda2, tension)
@@ -289,25 +285,28 @@ def raccord_graph(graph, start, end):
     return raccords
 
 
-def segmentation(A):
-    # A contient des zeros, sauf la limite qui est a 255
-    # on place une graine de chaque cote et on propage
-    A[0, 0] = 1
-    A[0, A.shape[1]-1] = 2
-    while np.sum(A == 0) > 0:
-        N = A.shape[0]
-        for i in range(1, N):
-            A[i, :] += np.logical_and(A[i, :] == 0, A[i-1, :] == 1) + 2*np.logical_and(A[i, :] == 0, A[i-1, :] == 2)
-        N = A.shape[1]
-        for i in range(1, N):
-            A[:, i] += np.logical_and(A[:, i] == 0, A[:, i-1] == 1) + 2*np.logical_and(A[:, i] == 0, A[:, i-1] == 2)
-        N = A.shape[0]
-        for i in reversed(range(0, N-1)):
-            A[i, :] += np.logical_and(A[i, :] == 0, A[i+1, :] == 1) + 2*np.logical_and(A[i, :] == 0, A[i+1, :] == 2)
-        N = A.shape[1]
-        for i in reversed(range(0, N-1)):
-            A[:, i] += np.logical_and(A[:, i] == 0, A[:, i+1] == 1) + 2*np.logical_and(A[:, i] == 0, A[:, i+1] == 2)
-    A[A == 255] = 1
+def propag_opi(frontiere, graph):
+    """ retourne le graph final en propageant les opis de part et d'autre du chemin frontiere """
+    graph = graph + frontiere
+    graine = np.where(graph == 1)[0]
+    print(graine)
+    # graph[0, graph.shape[1]-1] = 2
+    # while np.sum(graph == 0) > 0:
+    #     N = graph.shape[0]
+    #     for i in range(1, N):
+    #         # graph i = 2
+    #         graph[i, :] += np.logical_and(graph[i, :] == 0, graph[i-1, :] == 1) + 2*np.logical_and(graph[i, :] == 0, graph[i-1, :] == 2)
+    #     N = graph.shape[1]
+    #     for i in range(1, N):
+    #         graph[:, i] += np.logical_and(graph[:, i] == 0, graph[:, i-1] == 1) + 2*np.logical_and(graph[:, i] == 0, graph[:, i-1] == 2)
+    #     N = graph.shape[0]
+    #     for i in reversed(range(0, N-1)):
+    #         graph[i, :] += np.logical_and(graph[i, :] == 0, graph[i+1, :] == 1) + 2*np.logical_and(graph[i, :] == 0, graph[i+1, :] == 2)
+    #     N = graph.shape[1]
+    #     for i in reversed(range(0, N-1)):
+    #         graph[:, i] += np.logical_and(graph[:, i] == 0, graph[:, i+1] == 1) + 2*np.logical_and(graph[:, i] == 0, graph[:, i+1] == 2)
+    # graph[graph == 255] = 1
+    return graph
 
 
 # -----------------------
@@ -392,19 +391,11 @@ def plus_proche_voisin(pt, rayon, graph):
     y = pt[1]
     val = graph[pt[0], pt[1]]
     # calcul de la zone de recherche avec gestion des bords
-    i_min = x-rayon
-    i_max = x+rayon+1
-    j_min = y-rayon
-    j_max = y+rayon+1
     l, c = graph.shape[0], graph.shape[1]
-    if i_min < 0:
-        i_min = 0
-    if j_min < 0:
-        j_min = 0
-    if i_max > l:
-        i_max = l
-    if j_max > c:
-        j_max = c
+    i_min = max(x-rayon, 0)
+    i_max = min(x+rayon+1, l)
+    j_min = max(y-rayon, 0)
+    j_max = min(y+rayon+1, c)
     zone_recherche = graph[i_min:i_max, j_min:j_max]
     # voisins de valeur differente de celle du pt
     zone_recherche = np.where(zone_recherche == val, 0, zone_recherche)

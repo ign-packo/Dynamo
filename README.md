@@ -34,7 +34,7 @@ Environnement Python avec les libs suivantes :
 **Notes :**
 * Le graph initial en tif ne contient qu'une seule bande avec les valeurs 0 pour les zones de no data, 1 pour l'opi 1, 2 pour l'opi 2
 * Le geojson détaille les points du polygone de retouche
-* le paramètre --ref doit être égal à la valeur de l'opi de référence du paramètre 'CLICHE' dans le fichier geojson du graph (changement à venir)
+* le paramètre --ref doit être égal à la valeur de l'opi de référence du paramètre 'CLICHE' dans le fichier geojson du graph (changements à venir)
 
 ## Exemples d'utilisation
 
@@ -42,14 +42,14 @@ Environnement Python avec les libs suivantes :
 
 Lancer la commande suivante :
 ``` bash
-python3 main.py -i data_0/input/opi1.tif -ii data_0/input/opi2.tif -g data_0/input/graph.tif -j data_0/input/graph.geojson -p data_0/input/saisieV2.geojson -r opi2.grf -o data_0/output/
+python3 main.py -i data_0/input/opi1.tif -ii data_0/input/opi2.tif -g data_0/input/graph.tif -j data_0/input/graph.geojson -p data_0/input/saisieV2.geojson -r opi2.grf -o data_0/output/ -v True
 ```
 
 ### data_1
 
 Lancer la commande suivante :
 ``` bash
-python3 main.py -i data_1/input/opi1.tif -ii data_1/input/opi2.tif -g data_1/input/graph.tif -j data_1/input/graph.geojson -p data_1/input/saisie.geojson -r opi2.tif -o data_1/output/
+python3 main.py -i data_1/input/opi1.tif -ii data_1/input/opi2.tif -g data_1/input/graph.tif -j data_1/input/graph.geojson -p data_1/input/saisie.geojson -r opi2.tif -o data_1/output/ -v True
 ```
 
 ***

@@ -1,8 +1,9 @@
+import time
 import argparse
 import numpy as np
 from osgeo import gdal
 import progdyn
-import time
+
 
 def arg_parser():
     """ Extraction des arguments de la ligne de commande """
@@ -48,33 +49,32 @@ ARGS = arg_parser()
 
 if __name__ == "__main__":
 
-    # commandes
-    # python3 main.py -i ../data_0/opi1.tif -ii ../data_0/opi2.tif -g ../data_0/graph.tif -j ../data_0/graph.geojson -p ../data_0/saisieV2.geojson -r opi2.grf -o res_cheminement/data0/
-    # python3 main.py -i ../data_1/opi1.tif -ii ../data_1/opi2.tif -g ../data_1/graph.tif -j ../data_1/graph.geojson -p ../data_1/saisie.geojson -r opi2.tif -o res_cheminement/data1/
+    verboseprint = print if ARGS.verbose else lambda *a, **k: None
 
-    verbose = ARGS.verbose
-    if verbose:
-        print("Arguments: ", ARGS)
+    verboseprint("Arguments: ", ARGS)
 
     start = time.perf_counter()
 
+    # import opis
+
+    verboseprint("Import des opis et du graph...")
     opi, img = progdyn.import_opi(ARGS.opi1, ARGS.opi2)
-    outputpath = ARGS.outputpath
+    graph = progdyn.import_graph(ARGS.graphTif)
 
     # récupération des pts saisis
 
+    verboseprint("Import des points saisis...")
     emprise = progdyn.emprise_img_gdal(img)
     size = opi.shape
-
     list_pts = progdyn.recup_pts_saisis(ARGS.points,
-                                      ARGS.graphGeojson,
-                                      ARGS.ref,
-                                      emprise,
-                                      size)
+                                        ARGS.graphGeojson,
+                                        ARGS.ref,
+                                        emprise,
+                                        size)
 
     # snapping pts depart & arrive
 
-    graph = progdyn.import_graph(ARGS.graphTif)
+    verboseprint("Snapping des points départ et arrivé sur le graph...")
 
     first_pt = list_pts[0]
     point_depart = progdyn.plus_proche_voisin(first_pt, 100, graph)
@@ -85,8 +85,9 @@ if __name__ == "__main__":
     list_pts.insert(0, point_depart)
     list_pts.append(point_arrive)
 
-    # raccort graph initial
-    
+    # raccort graph initial (à corriger pr data 1)
+
+    verboseprint("Raccords début et fin du graph...")
     raccords = progdyn.raccord_graph(graph, point_depart, point_arrive)
     raccord_start, points_raccord_start = raccords[0][0], raccords[0][1]
     raccord_end, points_raccord_end = raccords[1][0], raccords[1][1]
@@ -100,41 +101,45 @@ if __name__ == "__main__":
     tension = ARGS.tension
     cmin = ARGS.cmin
 
-    # first raccord
+    # # first raccord
     # print("raccord début :", points_raccord_start[0], point_depart)
     # chemin, p, masque = raccord_start, points_raccord_start, np.zeros((size))
-    
-    print(f"cheminement C1 :", list_pts[0], list_pts[1])
+
+    verboseprint("Cheminement C1 :", list_pts[0], list_pts[1])
     chemin, p, masque = progdyn.calc_cheminement(opi, list_pts[0], list_pts[1],
-                                         marge, lambda1, lambda2, tension, cmin, 'C1')
+                                                 marge, lambda1, lambda2, tension, cmin)
     masque = np.where(masque == 1, 255., 0.)
-    for k in range(2, len(list_pts)):
+    for k in range(1, len(list_pts)):
         p_before = p
-        print(f"cheminement C{k} :", list_pts[k-1], list_pts[k])
+        verboseprint(f"Cheminement C{k} :", list_pts[k-1], list_pts[k])
         c, p, m = progdyn.calc_cheminement(opi, list_pts[k-1], list_pts[k],
-                                   marge, lambda1, lambda2, tension, cmin, f'C{k}')
+                                           marge, lambda1, lambda2, tension, cmin)
         chemin += c
         # nettoyage
         chemin = progdyn.nettoyage(chemin, p, p_before)
         m = np.where(m == 1, 255., 0.)
         masque += m
-    
-    # last raccord
+
+    # # last raccord
     # print("raccord fin :", point_arrive, points_raccord_end[-1])
     # chemin += raccord_end
     # chemin = progdyn.nettoyage(chemin, points_raccord_end, p) # nettoyage
 
+    # graphe final (en cours de dev)
 
-    # graphe final
-
+    verboseprint("Calcul du graph final...")
+    graph_final = progdyn.propag_opi(chemin, graph)
 
     # export
 
+    verboseprint("Export...")
+    outputpath = ARGS.outputpath
     progdyn.export(chemin, outputpath+"chemin_global.tif",
                    img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)
     progdyn.export(masque, outputpath+"masque_global.tif",
                    img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)
-
+    progdyn.export(graph_final, outputpath+"graph_final.tif",
+                   img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)
 
     end = time.perf_counter()
-    print("Finished in {}s".format((end - start)))
+    verboseprint(f"Finished in {end - start}s")
