@@ -9,6 +9,7 @@ Environnement Python avec les libs suivantes :
 ![Gdal](https://img.shields.io/badge/GDAL-5CAE58.svg?style=for-the-badge&logo=GDAL&logoColor=white)
 ![NumPy](https://img.shields.io/badge/numpy-%23013243.svg?style=for-the-badge&logo=numpy&logoColor=white)
 ![SciPy](https://img.shields.io/badge/SciPy-654FF0?style=for-the-badge&logo=SciPy&logoColor=white)
+![Scikit-image](https://img.shields.io/static/v1?label=&message=scikit-image&color=orange)
 ![GeoPandas](https://img.shields.io/static/v1?label=&message=GeoPandas&color=purple)
 ![Heapq](https://img.shields.io/static/v1?label=&message=heapq&color=blue)
 ![Argparse](https://img.shields.io/static/v1?label=&message=argparse&color=darkred)
@@ -32,7 +33,7 @@ Environnement Python avec les libs suivantes :
 | --verbose | -v | non | float | False | si True, affiche les prints |
 
 **Notes :**
-* Le graph initial en tif ne contient qu'une seule bande avec les valeurs 0 pour les zones de no data, 1 pour l'opi 1, 2 pour l'opi 2
+* Le graph initial en tif ne contient qu'une seule bande avec les valeurs 0 pour les zones de no data, 1 pour l'opi de référence, 2 pour l'autre opi 
 * Le geojson détaille les points du polygone de retouche
 * le paramètre --ref doit être égal à la valeur de l'opi de référence du paramètre 'CLICHE' dans le fichier geojson du graph (changements à venir)
 

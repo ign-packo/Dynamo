@@ -3,6 +3,7 @@ from osgeo import gdal
 import numpy as np
 from scipy import signal
 import geopandas as gpd
+from skimage.segmentation import flood, flood_fill
 
 
 def calc_emprise(opi, start, end, marge):
@@ -177,7 +178,7 @@ def calc_cheminement(opi, start, end, marge, lambda1, lambda2, tension, coutmin)
     return chemin, points_chemin, masque
 
 
-def nettoyage(agregat_chemins, points_chemin, points_chemin_precedent):
+def nettoyage_aggregat(agregat_chemins, points_chemin, points_chemin_precedent):
     """ nettoie les chemins des boucles et aller-retour formés par l'aggregation des chemins """
     doublons = np.argwhere(agregat_chemins == 510)
     voisinage4x4 = np.array([[-1, 0], [0, 1], [0, -1], [1, 0]])
@@ -200,53 +201,61 @@ def nettoyage(agregat_chemins, points_chemin, points_chemin_precedent):
                     points_boucle = np.array(points_chemin_precedent[index_d+1:-1])
                     agregat_chemins[points_boucle[:, 0], points_boucle[:, 1]] = 0
             except:
-                pass
+                pass        
     return agregat_chemins
 
 
-"""
-def remonter_graph(frontiere, graine, start, end):
-    # gestion des bords
-    frontiere = np.pad(frontiere, pad_width=1, mode='constant', constant_values=[np.NaN, np.NaN])
-    raccords = np.zeros((frontiere.shape))
-    voisinage4x4 = np.array([[-1, 0], [0, 1], [0, -1], [1, 0]])
-    g = (graine[0]+1, graine[1]+1) # on rajoute +1 en ligne & colonne
-    start = (start[0]+1, start[1]+1) # on rajoute +1 en ligne & colonne
-    end = (end[0]+1, end[1]+1) # on rajoute +1 en ligne & colonne
-    val_g = frontiere[g]
-    precedent = g
-    iter = 0
-    while (g != start or g != end) and iter < 300:
-        iter += 1
-        print(g)
-        arg_voisins = voisinage4x4 + g
-        val_voisins = frontiere[arg_voisins[:, 0], arg_voisins[:, 1]]
-        count_val_g = np.count_nonzero(val_voisins == val_g)
-        if count_val_g == 1:
-            suivant = arg_voisins[np.argwhere(val_voisins == val_g)[0][0]]
-        elif count_val_g>1:
-            print("totooooo")
-            print(val_voisins)
-            suivant = arg_voisins[np.argwhere(val_voisins == val_g)[0][0]]
-            for k in range(count_val_g):
-                index_v = arg_voisins[np.argwhere(val_voisins == val_g)[k][0]]
-                print(index_v)
-                print(precedent)
-                if (index_v[0], index_v[1]) == precedent:
-                    print("precedent")
-                    continue
-                else:
-                    suivant = index_v
-                    break
-            print("choix", suivant)
-        else:
-            print(error)
+def nettoyage_liste_points(liste_chemin, chemin_clean):
+    """ nettoie la liste des points du chemin global selon le chemin raster clean """
+    liste_chemin_clean = liste_chemin.copy()
+    for p in liste_chemin:
+        if chemin_clean[p] == 0.:
+            liste_chemin_clean.remove(p)
+    return liste_chemin_clean
 
-        raccords[g] = 1
-        precedent = g
-        g = (suivant[0], suivant[1])
-    return raccords[1:-1, 1:-1]
-"""
+
+def nettoyage_intersection(chemin, liste_chemin, graph, ref):
+    """ 
+    nettoie le chemin de ses intersections avec le graph,
+    en gardant la plus grande portion de chemin sans intersection de graph
+    """
+    # on cherche les pts qui intersectent le graph
+    index_intersection = []
+    for index_point in range(len(liste_chemin)):
+        point = liste_chemin[index_point]
+        if graph[point] == ref:
+            index_intersection.append(index_point)
+    if len(index_intersection) > 2:
+        index_intersection = np.array(index_intersection)
+        # on récupère les deux intersections voisines les plus éloignées l'une de l'autre
+        # plus précisément : leur index dans la liste du chemin global
+        # dist = l'écart d'index le plus grand entre deux intersections voisines
+        dist = index_intersection[1:]-index_intersection[:-1]
+        arg_distmax = np.argmax(dist)
+        idxA = index_intersection[arg_distmax] 
+        idxB = index_intersection[arg_distmax+1] 
+        # on supprime tous les points avant la 1ere intersection A et tout ceux apres la 2eme B
+        points_avant = np.array(liste_chemin[:idxA])
+        if points_avant.shape[0] > 0:
+            chemin[points_avant[:, 0], points_avant[:, 1]] = 0
+        points_apres = np.array(liste_chemin[idxB+1:])
+        if points_apres.shape[0] > 0:
+           chemin[points_apres[:, 0], points_apres[:, 1]] = 0
+    return chemin, liste_chemin[idxA:idxB+1]
+
+
+def remplir_par_diffusion(frontiere, graph, ref):
+    # frontiere = nettoyage_intersection(frontiere, graph, ref)
+    graph_final = np.where(frontiere == 255., ref, graph)
+    graine = (684, 577)
+    graph_final = flood_fill(graph_final, graine, ref, connectivity=1)
+    return graph_final
+
+
+def choix_direction(start, end, graph):
+    voisinage4x4 = np.array([[-1, 0], [0, 1], [0, -1], [1, 0]])
+
+    return 0
 
 
 def recup_graines_bords(frontiere):
@@ -283,30 +292,6 @@ def raccord_graph(graph, start, end):
         if start not in points_chemin:
             raccords.append([chemin, points_chemin])
     return raccords
-
-
-def propag_opi(frontiere, graph):
-    """ retourne le graph final en propageant les opis de part et d'autre du chemin frontiere """
-    graph = graph + frontiere
-    graine = np.where(graph == 1)[0]
-    print(graine)
-    # graph[0, graph.shape[1]-1] = 2
-    # while np.sum(graph == 0) > 0:
-    #     N = graph.shape[0]
-    #     for i in range(1, N):
-    #         # graph i = 2
-    #         graph[i, :] += np.logical_and(graph[i, :] == 0, graph[i-1, :] == 1) + 2*np.logical_and(graph[i, :] == 0, graph[i-1, :] == 2)
-    #     N = graph.shape[1]
-    #     for i in range(1, N):
-    #         graph[:, i] += np.logical_and(graph[:, i] == 0, graph[:, i-1] == 1) + 2*np.logical_and(graph[:, i] == 0, graph[:, i-1] == 2)
-    #     N = graph.shape[0]
-    #     for i in reversed(range(0, N-1)):
-    #         graph[i, :] += np.logical_and(graph[i, :] == 0, graph[i+1, :] == 1) + 2*np.logical_and(graph[i, :] == 0, graph[i+1, :] == 2)
-    #     N = graph.shape[1]
-    #     for i in reversed(range(0, N-1)):
-    #         graph[:, i] += np.logical_and(graph[:, i] == 0, graph[:, i+1] == 1) + 2*np.logical_and(graph[:, i] == 0, graph[:, i+1] == 2)
-    # graph[graph == 255] = 1
-    return graph
 
 
 # -----------------------
