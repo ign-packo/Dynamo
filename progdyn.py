@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# author : IJeuffrard
+# version : v.1 20/12/2023
+
+
 import heapq
 from osgeo import gdal
 import numpy as np

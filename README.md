@@ -33,7 +33,7 @@ Environnement Python avec les libs suivantes :
 | --verbose | -v | non | float | False | si True, affiche les prints |
 
 **Notes :**
-* Le graph initial en tif ne contient qu'une seule bande avec les valeurs 0 pour les zones de no data, 1 pour l'opi de référence, 2 pour l'autre opi 
+* Le graph initial en tif ne contient qu'une seule bande avec les valeurs 0 pour les zones de no data, 1 pour l'opi de référence, 2 pour l'autre opi
 * Le geojson détaille les points du polygone de retouche
 * le paramètre --ref doit être égal à la valeur de l'opi de référence du paramètre 'CLICHE' dans le fichier geojson du graph (changements à venir)
 
@@ -46,12 +46,19 @@ Lancer la commande suivante :
 python3 main.py -i data_0/input/opi1.tif -ii data_0/input/opi2.tif -g data_0/input/graph.tif -j data_0/input/graph.geojson -p data_0/input/saisieV2.geojson -r opi2.grf -o data_0/output/ -v True
 ```
 
+Résultat en 28.3s sur ma machine* dont 27.1s pour le calcul des cheminements.
+
 ### data_1
 
 Lancer la commande suivante :
 ``` bash
 python3 main.py -i data_1/input/opi1.tif -ii data_1/input/opi2.tif -g data_1/input/graph.tif -j data_1/input/graph.geojson -p data_1/input/saisie.geojson -r opi2.tif -o data_1/output/ -v True
 ```
+
+Résultat en 41.8s sur ma machine* dont 40.3s pour le calcul des cheminements.
+
+*Dell Inc. Precision 3561, mémoire : 32,0 Gio, processeur : 11th Gen Intel® Core™ i7-11800H @ 2.30GHz × 16
+
 
 ***
 [![IGN](IGN_logo.png)](IGN_logo)

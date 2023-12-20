@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# author : IJeuffrard
+# version : v.1 20/12/2023
+
+
 import time
 import argparse
 import numpy as np
@@ -63,7 +68,7 @@ if __name__ == "__main__":
 
     # récupération des pts saisis
 
-    verboseprint("Import des points saisis...")
+    verboseprint("* Import des points saisis...")
     emprise = progdyn.emprise_img_gdal(img)
     size = opi.shape
     list_pts = progdyn.recup_pts_saisis(ARGS.points,
@@ -74,7 +79,7 @@ if __name__ == "__main__":
 
     # snapping pts depart & arrive
 
-    verboseprint("Snapping des points départ et arrivé sur le graph...")
+    verboseprint("* Snapping des points départ et arrivé sur le graph...")
 
     first_pt = list_pts[0]
     point_depart = progdyn.plus_proche_voisin(first_pt, 100, graph)
@@ -87,6 +92,9 @@ if __name__ == "__main__":
 
     # calcul du meilleur cheminement tronçon par tronçon
 
+    verboseprint("* Calcul nouveau chemin de mosaïquage...")
+    tic = time.perf_counter()
+
     resol = img.GetGeoTransform()[1]
     marge = int(ARGS.marge/resol)
     lambda1 = ARGS.lambda1
@@ -94,14 +102,14 @@ if __name__ == "__main__":
     tension = ARGS.tension
     cmin = ARGS.cmin
 
-    verboseprint("Cheminement C1 :", list_pts[0], list_pts[1])
+    verboseprint("    Cheminement C1 :", list_pts[0], list_pts[1])
     chemin, p, masque = progdyn.calc_cheminement(opi, list_pts[0], list_pts[1],
                                                  marge, lambda1, lambda2,
                                                  tension, cmin)
     masque = np.where(masque == 1, 255., 0.)
     liste_chemin_global = p
     for k in range(2, len(list_pts)):
-        verboseprint(f"Cheminement C{k} :", list_pts[k-1], list_pts[k])
+        verboseprint(f"    Cheminement C{k} :", list_pts[k-1], list_pts[k])
         p_before = p
         c, p, m = progdyn.calc_cheminement(opi, list_pts[k-1], list_pts[k],
                                            marge, lambda1, lambda2,
@@ -112,22 +120,31 @@ if __name__ == "__main__":
         m = np.where(m == 1, 255., 0.)
         masque += m
 
+    toc = time.perf_counter()
+    verboseprint(f"{toc - tic}s")
+
     # nettoyage avant/apres intersections graph
 
-    ref = 1
-    verboseprint("Nettoyage des intersections avec le graph...")
+    tic = time.perf_counter()
+    REF = 1
+    verboseprint("* Nettoyage des intersections avec le graph...")
     liste_clean = progdyn.nettoyage_liste_points(liste_chemin_global, chemin)
     chemin, liste_clean = progdyn.nettoyage_intersection(chemin, liste_clean,
-                                                         graph, ref)
+                                                         graph, REF)
+    toc = time.perf_counter()
+    verboseprint(f"{toc - tic}s")
 
     # graphe final (en cours de dev)
 
-    verboseprint("Calcul du graph final...")
+    tic = time.perf_counter()
+    verboseprint("* Calcul du graph final...")
     graph_final = progdyn.remplir_par_diffusion(chemin,
                                                 graph,
                                                 liste_clean[0],
                                                 liste_clean[-1],
-                                                ref)
+                                                REF)
+    toc = time.perf_counter()
+    verboseprint(f"{toc - tic}s")
 
     # export
 
