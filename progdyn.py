@@ -196,12 +196,12 @@ def nettoyage_aggregat(agregat_chemins, points_chemin, points_chemin_precedent):
                 index_d = points_chemin_precedent.index((d[0], d[1]))
                 if (index_d + 1) == len(points_chemin_precedent) - 1:
                     points_boucle = np.array(points_chemin_precedent[-1])
-                    agregat_chemins[points_boucle] = 0
+                    agregat_chemins[points_boucle[0], points_boucle[1]] = 0
                 else:
                     points_boucle = np.array(points_chemin_precedent[index_d+1:-1])
                     agregat_chemins[points_boucle[:, 0], points_boucle[:, 1]] = 0
             except:
-                pass        
+                pass
     return agregat_chemins
 
 
@@ -215,7 +215,7 @@ def nettoyage_liste_points(liste_chemin, chemin_clean):
 
 
 def nettoyage_intersection(chemin, liste_chemin, graph, ref):
-    """ 
+    """
     nettoie le chemin de ses intersections avec le graph,
     en gardant la plus grande portion de chemin sans intersection de graph
     """
@@ -232,66 +232,59 @@ def nettoyage_intersection(chemin, liste_chemin, graph, ref):
         # dist = l'écart d'index le plus grand entre deux intersections voisines
         dist = index_intersection[1:]-index_intersection[:-1]
         arg_distmax = np.argmax(dist)
-        idxA = index_intersection[arg_distmax] 
-        idxB = index_intersection[arg_distmax+1] 
+        idxA = index_intersection[arg_distmax]
+        idxB = index_intersection[arg_distmax + 1]
         # on supprime tous les points avant la 1ere intersection A et tout ceux apres la 2eme B
         points_avant = np.array(liste_chemin[:idxA])
         if points_avant.shape[0] > 0:
             chemin[points_avant[:, 0], points_avant[:, 1]] = 0
         points_apres = np.array(liste_chemin[idxB+1:])
         if points_apres.shape[0] > 0:
-           chemin[points_apres[:, 0], points_apres[:, 1]] = 0
+            chemin[points_apres[:, 0], points_apres[:, 1]] = 0
     return chemin, liste_chemin[idxA:idxB+1]
 
 
-def remplir_par_diffusion(frontiere, graph, ref):
-    # frontiere = nettoyage_intersection(frontiere, graph, ref)
-    graph_final = np.where(frontiere == 255., ref, graph)
-    graine = (684, 577)
-    graph_final = flood_fill(graph_final, graine, ref, connectivity=1)
-    return graph_final
-
-
-def choix_direction(start, end, graph):
-    voisinage4x4 = np.array([[-1, 0], [0, 1], [0, -1], [1, 0]])
-
-    return 0
-
-
-def recup_graines_bords(frontiere):
-    """ retourne les points de depart/arrivé (sur les bords) du graph """
-    frontiere[2:-2, 2:-2] = 0       # on ne garde que les pixels des bords sur 2 lignes
-    filtre = np.array([[0, 1, 0], [1, 10, 1], [0, 1, 0]])
-    res = signal.convolve2d(frontiere, filtre, mode='same', boundary='fill')
-    res[1:-1, 1:-1] = 0     # on ne garde que les pixels des bords
-    graines = np.argwhere(res == 11)
-    return graines
-
-
-def raccord_graph(graph, start, end):
-    """ calcul les chemins de raccord de debut et fin du graph """
+def remplir_par_diffusion(chemin, graph, start, end, ref):
+    """
+    propage l'opi de référence jusqu'au nouveau chemin de mosaiquage
+    retourne le graph final
+    """
+    # frontiere
     filtre = np.ones((3, 3))
     res = signal.convolve2d(graph, filtre, mode='same', boundary='symm')
     contours = np.where(res != 9*graph, graph, 0)
-    graines_bords = recup_graines_bords(np.where(contours == 1, 1, 0))
-    frontiere = np.where(contours == 1, 0., 255.)
-    raccords = []
-    # raccord start
-    for graine in graines_bords:
-        graine = (graine[0], graine[1])
-        cc = dijkstra(frontiere, start, graine, cout_min=1./256.)
-        chemin, points_chemin = retour(np.copy(cc), start, graine)
-        points_chemin.reverse()
-        if end not in points_chemin:
-            raccords.append([chemin, points_chemin])
-    # raccord end
-    for graine in graines_bords:
-        graine = (graine[0], graine[1])
-        cc = dijkstra(frontiere, end, graine, cout_min=1./256.)
-        chemin, points_chemin = retour(np.copy(cc), end, graine)
-        if start not in points_chemin:
-            raccords.append([chemin, points_chemin])
-    return raccords
+    val_autre_opi = 2   # l'opi qui n'est pas la ref vaut par convention 2 mais test au cas ou
+    if ref == 2:
+        val_autre_opi = 1
+    frontiere = np.where(contours == val_autre_opi, 0., 255.)
+    # choix graine initiale et liste graines suivantes (suit la frontiere dans la bonne direction)
+    graine, liste_graine = trouver_graine_depart(start, frontiere, chemin, end)
+    if graine == 0:
+        raise ValueError("Error dans le choix de la graine initiale")
+    graph_final = np.where(chemin >= 255., ref, graph)
+    # remplissage pour les graines nécéssaires
+    for graine in liste_graine:
+        if graph_final[graine] != ref:
+            graph_final = flood_fill(graph_final, graine, ref, connectivity=1)
+    return graph_final
+
+
+def trouver_graine_depart(point, frontiere, chemin, fin):
+    """ determine la graine de départ et les suivantes qui suivent la frontiere dans la bonne direction """
+    voisinage8x8 = np.array([[-1, 0], [0, 1], [0, -1], [1, 0], [-1, -1], [1, 1], [-1, 1], [1, -1]])
+    distmin = float('inf')
+    graine = 0
+    liste_graine = 0
+    for delta in voisinage8x8:
+        voisin = (point[0]+delta[0], point[1]+delta[1])
+        if frontiere[voisin] == 0. and chemin[voisin] == 0:
+            cc = dijkstra(frontiere, voisin, fin, cout_min=1./256.)
+            chemin, points_chemin = retour(np.copy(cc), voisin, fin)
+            if len(points_chemin) < distmin:
+                distmin = len(points_chemin)
+                graine = voisin
+                liste_graine = points_chemin
+    return graine, liste_graine
 
 
 # -----------------------

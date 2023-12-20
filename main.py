@@ -84,15 +84,7 @@ if __name__ == "__main__":
 
     list_pts.insert(0, point_depart)
     list_pts.append(point_arrive)
-    
-    """
-    # raccort graph initial (à corriger pr data 1)
 
-    verboseprint("Raccords début et fin du graph...")
-    raccords = progdyn.raccord_graph(graph, point_depart, point_arrive)
-    raccord_start, points_raccord_start = raccords[0][0], raccords[0][1]
-    raccord_end, points_raccord_end = raccords[1][0], raccords[1][1]
-    """
     # calcul du meilleur cheminement tronçon par tronçon
 
     resol = img.GetGeoTransform()[1]
@@ -102,41 +94,40 @@ if __name__ == "__main__":
     tension = ARGS.tension
     cmin = ARGS.cmin
 
-    # # first raccord
-    # print("raccord début :", points_raccord_start[0], point_depart)
-    # chemin, p, masque = raccord_start, points_raccord_start, np.zeros((size))
-
     verboseprint("Cheminement C1 :", list_pts[0], list_pts[1])
     chemin, p, masque = progdyn.calc_cheminement(opi, list_pts[0], list_pts[1],
-                                                 marge, lambda1, lambda2, tension, cmin)
+                                                 marge, lambda1, lambda2,
+                                                 tension, cmin)
     masque = np.where(masque == 1, 255., 0.)
     liste_chemin_global = p
     for k in range(2, len(list_pts)):
         verboseprint(f"Cheminement C{k} :", list_pts[k-1], list_pts[k])
         p_before = p
         c, p, m = progdyn.calc_cheminement(opi, list_pts[k-1], list_pts[k],
-                                           marge, lambda1, lambda2, tension, cmin)
+                                           marge, lambda1, lambda2,
+                                           tension, cmin)
         chemin += c
-        chemin = progdyn.nettoyage_aggregat(chemin, p, p_before)    # nettoyage        
+        chemin = progdyn.nettoyage_aggregat(chemin, p, p_before)    # nettoyage
         liste_chemin_global += p
         m = np.where(m == 1, 255., 0.)
         masque += m
 
-    # # last raccord
-    # print("raccord fin :", point_arrive, points_raccord_end[-1])
-    # chemin += raccord_end
-    # chemin = progdyn.nettoyage(chemin, points_raccord_end, p) # nettoyage
-   
     # nettoyage avant/apres intersections graph
-    
-    liste_chemin_clean = progdyn.nettoyage_liste_points(liste_chemin_global, chemin)
-    chemin, liste_chemin_clean = progdyn.nettoyage_intersection(chemin, liste_chemin_clean, graph, 1)
-    
+
+    ref = 1
+    verboseprint("Nettoyage des intersections avec le graph...")
+    liste_clean = progdyn.nettoyage_liste_points(liste_chemin_global, chemin)
+    chemin, liste_clean = progdyn.nettoyage_intersection(chemin, liste_clean,
+                                                         graph, ref)
+
     # graphe final (en cours de dev)
-    
+
     verboseprint("Calcul du graph final...")
-    # progdyn.choix_direction(liste_chemin_clean[0], liste_chemin_clean[-1], graph)
-    # graph_final = progdyn.remplir_par_diffusion(chemin, graph, 1)
+    graph_final = progdyn.remplir_par_diffusion(chemin,
+                                                graph,
+                                                liste_clean[0],
+                                                liste_clean[-1],
+                                                ref)
 
     # export
 
