@@ -78,6 +78,7 @@ def correl_5x5(A, B):
     Var = np.sqrt(np.multiply(SA2-np.multiply(SA, SA)/25., SB2-np.multiply(SB, SB)/25.))
     # print("varA : ", SA2-np.multiply(SA, SA)/25.)
     # print("varB : ", SB2-np.multiply(SB, SB)/25.)
+    np.seterr(divide='ignore', invalid='ignore') # hide exception from division by Nan
     Coef = np.divide(Cov, Var)
     # print("coef : ", Coef)
     return Coef
