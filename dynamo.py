@@ -250,33 +250,12 @@ def nettoyage_intersection(chemin, liste_chemin, graph, ref):
     return chemin, liste_chemin[idxA:idxB+1]
 
 
-def trouver_graine_depart(point, frontiere, chemin, end):
-    """ determine la graine de départ et les suivantes qui suivent la frontiere dans la bonne direction """
-    voisinage8x8 = np.array([[-1, 0], [0, 1], [0, -1], [1, 0], [-1, -1], [1, 1], [-1, 1], [1, -1]])
-    distmin = float('inf')
-    graine = 0
-    liste_graine = 0
-    for delta in voisinage8x8:
-        voisin = (point[0]+delta[0], point[1]+delta[1])
-        # pr chq voisin du pt de depart se trouvant à la frontiere du graph initial sans etre sur le chemin
-        if frontiere[voisin] == 0. and chemin[voisin] == 0:
-            cc = dijkstra(frontiere, voisin, end, cout_min=1./256.)
-            chemin, points_chemin = retour(np.copy(cc), voisin, end)
-            # on garde le voisin le plus proche du point d'arrivé (end)
-            # = la liste de points_chemin la plus courte entre ce voisin et l'arrivé par dijkstra
-            if len(points_chemin) < distmin:
-                distmin = len(points_chemin)
-                graine = voisin     # = choix de la direction de part et d'autre du chemin
-                liste_graine = points_chemin    # et de toutes les autres graines suivants cette direction
-    return graine, liste_graine
-
-
 def remplir_par_diffusion(chemin, graph, start, end, ref):
     """
     propage l'opi de référence jusqu'au nouveau chemin de mosaiquage
     retourne le graph final
     """
-    # frontiere
+    # calcul de la frontiere du graph initial du coté de l'autre opi
     filtre = np.ones((3, 3))
     res = signal.convolve2d(graph, filtre, mode='same', boundary='symm')
     contours = np.where(res != 9*graph, graph, 0)
@@ -286,12 +265,12 @@ def remplir_par_diffusion(chemin, graph, start, end, ref):
     # frontiere sert de matrice de cout initial pour remonter le graph initial avec dijkstra
     # donc on met un cout nul sur toute la frontiere que l'on souhaite remonter
     frontiere = np.where(contours == val_autre_opi, 0., 255.)
-    # choix graine initiale et liste graines suivantes (suit la frontiere dans la bonne direction)
-    graine, liste_graine = trouver_graine_depart(start, frontiere, chemin, end)
-    if graine == 0:
-        raise ValueError("Error dans le choix de la graine initiale")
-    graph_final = np.where(chemin >= 255., ref, graph)
+    # récupération de la liste des graines avec dijkstra sur la portion de la
+    # frontiere entre les deux intersections (start et end) du graph et du chemin
+    cc_frontiere = dijkstra(frontiere, start, end, cout_min=1./256.)
+    _, liste_graine = retour(np.copy(cc_frontiere), start, end)
     # remplissage pour les graines nécéssaires
+    graph_final = np.where(chemin >= 255., ref, graph)
     for graine in liste_graine:
         if graph_final[graine] != ref:
             graph_final = flood_fill(graph_final, graine, ref, connectivity=1)
@@ -299,6 +278,7 @@ def remplir_par_diffusion(chemin, graph, start, end, ref):
 
 
 def construire_ortho(graph, opi_ref, opi2):
+    """ Retourne l'ortho RVB finale construite à partir du graph final"""
     opi_ref = import_RVB(opi_ref)
     opi2 = import_RVB(opi2)
     ortho = np.zeros(opi_ref.shape)
@@ -333,6 +313,7 @@ def import_opi(path1, path2):
 
 
 def import_RVB(path):
+    """ import image 3 canaux """
     with rasterio.open(path) as raster_multi:
         band1 = raster_multi.read(1)
         band2 = raster_multi.read(2)
@@ -351,6 +332,7 @@ def export(data, name, geoTransform, wkt, format):
 
 
 def export_RVB(rasters, output_name, opi):
+    """ import image 3 canaux """
     with rasterio.Env():
         with rasterio.open(
             output_name,
