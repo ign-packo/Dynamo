@@ -78,6 +78,7 @@ def correl_5x5(A, B):
     Var = np.sqrt(np.multiply(SA2-np.multiply(SA, SA)/25., SB2-np.multiply(SB, SB)/25.))
     # print("varA : ", SA2-np.multiply(SA, SA)/25.)
     # print("varB : ", SB2-np.multiply(SB, SB)/25.)
+    np.seterr(divide='ignore', invalid='ignore') # hide exception from division by Nan
     Coef = np.divide(Cov, Var)
     # print("coef : ", Coef)
     return Coef
@@ -184,8 +185,8 @@ def calc_cheminement(opi, start, end, marge, lambda1, lambda2, tension, coutmin)
     return chemin, points_chemin, masque
 
 
-def nettoyage_aggregat(agregat_chemins, points_chemin, points_chemin_precedent):
-    """ nettoie les chemins des boucles et aller-retour formés par l'aggregation des chemins """
+def nettoyage_agregat(agregat_chemins, points_chemin, points_chemin_precedent):
+    """ nettoie les chemins des boucles et aller-retour formés par l'agregation des chemins """
     doublons = np.argwhere(agregat_chemins == 510)
     voisinage4x4 = np.array([[-1, 0], [0, 1], [0, -1], [1, 0]])
     for d in doublons:

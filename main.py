@@ -114,7 +114,7 @@ if __name__ == "__main__":
         c, p, m = dm.calc_cheminement(opi, list_pts[k-1], list_pts[k],
                                       marge, lambda1, lambda2, tension, cmin)
         chemin += c
-        chemin = dm.nettoyage_aggregat(chemin, p, p_before)    # nettoyage
+        chemin = dm.nettoyage_agregat(chemin, p, p_before)    # nettoyage
         liste_chemin_global += p
         m = np.where(m == 1, 255., 0.)
         masque += m
