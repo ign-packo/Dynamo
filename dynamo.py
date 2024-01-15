@@ -78,8 +78,9 @@ def correl_5x5(A, B):
     Var = np.sqrt(np.multiply(SA2-np.multiply(SA, SA)/25., SB2-np.multiply(SB, SB)/25.))
     # print("varA : ", SA2-np.multiply(SA, SA)/25.)
     # print("varB : ", SB2-np.multiply(SB, SB)/25.)
-    np.seterr(divide='ignore', invalid='ignore') # hide exception from division by Nan
+    np.seterr(divide='ignore', invalid='ignore')     # hide exception from division by Nan
     Coef = np.divide(Cov, Var)
+    Coef[Var==0.]=0.
     # print("coef : ", Coef)
     return Coef
 
@@ -303,6 +304,7 @@ def import_graph(path):
 
 def import_opi(path1, path2):
     """ fonction d'import des 2 opis (tif) en 1 """
+    gdal.UseExceptions()
     img1 = gdal.Open(path1)
     opi1 = img1.ReadAsArray()
     img2 = gdal.Open(path2)
