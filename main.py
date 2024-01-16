@@ -110,18 +110,24 @@ if __name__ == "__main__":
     liste_chemin_global = p
     for k in range(2, len(list_pts)):
         verboseprint(f"    Cheminement C{k} :", list_pts[k-1], list_pts[k])
-        p_before = p
+        # p_before = p
         c, p, m = dm.calc_cheminement(opi, list_pts[k-1], list_pts[k],
                                       marge, lambda1, lambda2, tension, cmin)
         chemin += c
-        chemin = dm.nettoyage_agregat(chemin, p, p_before)    # nettoyage
+
+        dm.export(chemin, ARGS.outputpath+f"chemin_{k}.tif",
+              img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)
+        chemin, p = dm.nettoyage_agregat(chemin, p, liste_chemin_global)    # nettoyage
+        dm.export(chemin, ARGS.outputpath+f"chemin_clean_{k}.tif",
+              img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)
+
         liste_chemin_global += p
         m = np.where(m == 1, 255., 0.)
         masque += m
 
     toc = time.perf_counter()
     verboseprint(f"{toc - tic}s")
-
+    
     # nettoyage avant/apres intersections graph
 
     tic = time.perf_counter()
@@ -145,7 +151,7 @@ if __name__ == "__main__":
     ortho = dm.construire_ortho(graph_final, ARGS.opi1, ARGS.opi2)
     toc = time.perf_counter()
     verboseprint(f"{toc - tic}s")
-
+    
     # export
 
     verboseprint("Export...")
