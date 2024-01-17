@@ -5,7 +5,6 @@
 
 import time
 import argparse
-import numpy as np
 from osgeo import gdal
 import dynamo as dm
 
@@ -103,62 +102,60 @@ if __name__ == "__main__":
     cmin = ARGS.cmin
 
     verboseprint("    Cheminement C1 :", list_pts[0], list_pts[1])
-    chemin, p, masque = dm.calc_cheminement(opi, list_pts[0], list_pts[1],
-                                            marge, lambda1, lambda2,
-                                            tension, cmin)
-    masque = np.where(masque == 1, 255., 0.)
-    liste_chemin_global = p
+    chemin, points_chemin, masque = dm.calc_cheminement(opi, list_pts[0],
+                                                        list_pts[1], marge,
+                                                        lambda1, lambda2,
+                                                        tension, cmin)
+    chemin_global = chemin
+    masque_global = masque
+    points_chemin_global = points_chemin
     for k in range(2, len(list_pts)):
         verboseprint(f"    Cheminement C{k} :", list_pts[k-1], list_pts[k])
-        # p_before = p
-        c, p, m = dm.calc_cheminement(opi, list_pts[k-1], list_pts[k],
-                                      marge, lambda1, lambda2, tension, cmin)
-        chemin += c
-
-        dm.export(chemin, ARGS.outputpath+f"chemin_{k}.tif",
-              img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)
-        chemin, p = dm.nettoyage_agregat(chemin, p, liste_chemin_global)    # nettoyage
-        dm.export(chemin, ARGS.outputpath+f"chemin_clean_{k}.tif",
-              img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)
-
-        liste_chemin_global += p
-        m = np.where(m == 1, 255., 0.)
-        masque += m
+        chemin, points_chemin, masque = dm.calc_cheminement(opi, list_pts[k-1],
+                                                            list_pts[k], marge,
+                                                            lambda1, lambda2,
+                                                            tension, cmin)
+        chemin_global += chemin
+        masque_global += masque
+        # nettoyage
+        chemin_global, points_chemin_global = dm.nettoyage_agregation(chemin_global,
+                                                                      points_chemin_global,
+                                                                      points_chemin)
 
     toc = time.perf_counter()
     verboseprint(f"{toc - tic}s")
-    
+
     # nettoyage avant/apres intersections graph
 
     tic = time.perf_counter()
     verboseprint("* Nettoyage des intersections avec le graph...")
     REF = 1     # attention convention à respecter
-    liste_clean = dm.nettoyage_liste_points(liste_chemin_global, chemin)
-    chemin, liste_clean = dm.nettoyage_intersection(chemin, liste_clean,
-                                                    graph, REF)
+    chemin_global, points_chemin_global = dm.nettoyage_intersection(chemin_global,
+                                                                    points_chemin_global,
+                                                                    graph, REF)
     toc = time.perf_counter()
     verboseprint(f"{toc - tic}s")
 
-    # graphe final et ortho
+    # graph final et ortho
 
     tic = time.perf_counter()
     verboseprint("* Calcul du graph/ortho final...")
-    graph_final = dm.remplir_par_diffusion(chemin,
+    graph_final = dm.remplir_par_diffusion(chemin_global,
                                            graph,
-                                           liste_clean[0],
-                                           liste_clean[-1],
+                                           points_chemin_global[0],
+                                           points_chemin_global[-1],
                                            REF)
     ortho = dm.construire_ortho(graph_final, ARGS.opi1, ARGS.opi2)
     toc = time.perf_counter()
     verboseprint(f"{toc - tic}s")
-    
+
     # export
 
     verboseprint("Export...")
     outputpath = ARGS.outputpath
-    dm.export(chemin, outputpath+"chemin_global.tif",
+    dm.export(chemin_global, outputpath+"chemin_global.tif",
               img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)
-    dm.export(masque, outputpath+"masque_global.tif",
+    dm.export(masque_global, outputpath+"masque_global.tif",
               img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)
     dm.export(graph_final, outputpath+"graph_final.tif",
               img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)

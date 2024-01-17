@@ -30,6 +30,7 @@ def calc_emprise(opi, start, end, marge):
     masque[:] = np.nan
     masque[i_min:i_max, j_min:j_max] = 1
     opi_masque = np.multiply(opi, masque)
+    masque = np.where(masque == 1, 255., 0.)
     return opi_masque, masque
 
 
@@ -186,89 +187,47 @@ def calc_cheminement(opi, start, end, marge, lambda1, lambda2, tension, coutmin)
     return chemin, points_chemin, masque
 
 
-def nettoyage_agregat(agregat_chemins, points_chemin, points_chemin_precedent):
-    """ nettoie les chemins des boucles et aller-retour formés par l'agregation des chemins """
-    agregat_chemins = np.where(agregat_chemins >= 255., 255., 0.)
+def nettoyage_agregation(agregat, points_agregat, points_chemin):
+    """ nettoie les boucles et aller-retour formés par l'agregation des chemins """
+    # on cherche les points de divergence (soit des points bordés par 3 voisins à 255.)
+    agregat = np.where(agregat >= 255., 255., 0.)
     points_chemin_array = np.array(points_chemin)
-    somme_voisins = agregat_chemins[points_chemin_array[:, 0]-1, points_chemin_array[:, 1]] + \
-                    agregat_chemins[points_chemin_array[:, 0], points_chemin_array[:, 1]-1] + \
-                    agregat_chemins[points_chemin_array[:, 0]+1, points_chemin_array[:, 1]] + \
-                    agregat_chemins[points_chemin_array[:, 0], points_chemin_array[:, 1]+1] 
+    somme_voisins = agregat[points_chemin_array[:, 0]-1, points_chemin_array[:, 1]] + \
+                    agregat[points_chemin_array[:, 0], points_chemin_array[:, 1]-1] + \
+                    agregat[points_chemin_array[:, 0]+1, points_chemin_array[:, 1]] + \
+                    agregat[points_chemin_array[:, 0], points_chemin_array[:, 1]+1]
     index_divergence = np.argwhere(somme_voisins > 510)
-    print(index_divergence.shape)
-        # print(points_chemin[index_divergence])
-        # print(index_divergence)
-        # list_index_divergence = []
-        # for i in range(index_divergence.shape[0]):
-        #     div = index_divergence[i][0] 
-        #     print(div)
-        #     if tuple(points_chemin[div]) in points_chemin_precedent:
-        #         print('ok')
-        #         # np.delete(index_divergence, np.where(index_divergence == div))
-        #         list_index_divergence.append(div)
-        # print(list_index_divergence)
-    
-    # if index_divergence.shape[0] == 0:
-    #     print(index_divergence)
-    #     index_divergence = [div for div in index_divergence[:][0] if tuple(points_chemin[div]) in points_chemin_precedent]
-    # else:
-    
+
     if index_divergence.shape[0] == 0:
-        pass
+        pass    # pas de nettoyage si pas de divergence
     else :
-        print(index_divergence)
-        index_divergence = [div for div in index_divergence[:][0] if tuple(points_chemin[div]) in points_chemin_precedent]
-        index_last_divergence = index_divergence[-1]
+        # on supprime les faux points divergence (cas où le tronçon courant colle simplement le précédent)
+        list_index_divergence = []
+        for i in range(index_divergence.shape[0]):
+            div = index_divergence[i][0]
+            if tuple(points_chemin[div]) in points_agregat:
+                list_index_divergence.append(div)
 
-        print(index_last_divergence)
+        if len(list_index_divergence) == 0:
+            pass  # pas de nettoyage si plus de divergence
+        else :
+            index_last_divergence = list_index_divergence[-1]
+            point_last_divergence = points_chemin[index_last_divergence]
 
-        # on supprime les points avant la divergence sur le chemin actuel
-        # suffit pour éliminer les aller-retour
-        points_afac = np.array(points_chemin[0:index_last_divergence])
-        agregat_chemins[points_afac[:, 0], points_afac[:, 1]] = 0
+            # on supprime les points avant la derniere divergence sur le tronçon courant
+            # suffit pour éliminer les aller-retour
+            points_afac = np.array(points_chemin[0:index_last_divergence])
+            agregat[points_afac[:, 0], points_afac[:, 1]] = 0
+            del points_chemin[0:index_last_divergence]
 
-        # on supprime les points au delà de la divergence sur le chemin aggregé
-        # nécéssaire pour éliminer les boucles
-        point_last_divergence = points_chemin[index_last_divergence]
-        index_last_divergence_in_chemin_global = points_chemin_precedent.index(point_last_divergence)
-        if (index_last_divergence_in_chemin_global + 1) == len(points_chemin_precedent):
-            points_afac = np.array(points_chemin_precedent[-1])
-        else:
-            points_afac = np.array(points_chemin_precedent[index_last_divergence_in_chemin_global:-1])
-        agregat_chemins[points_afac[:, 0], points_afac[:, 1]] = 0
+            # on supprime les points au delà de la divergence sur le chemin aggregé
+            # nécéssaire pour éliminer les boucles
+            index_last_divergence_in_points_agregat = points_agregat.index(point_last_divergence)
+            points_afac = np.array(points_agregat[index_last_divergence_in_points_agregat+1:])
+            agregat[points_afac[:, 0], points_afac[:, 1]] = 0
+            del points_agregat[index_last_divergence_in_points_agregat:]
 
-        # for d in points_chemin:
-        #     arg_voisins = voisinage4x4 + d
-        #     voisins = agregat_chemins[arg_voisins[:, 0], arg_voisins[:, 1]]
-        #     # si d est un point de divergence, d'où part une boucle/antenne
-        #     if np.sum(voisins) > 510:
-        #         print(d)
-        #         try:
-        #             # on supprime les points de la boucle arc suivant
-        #             index_d = points_chemin.index((d[0], d[1]))
-        #             points_boucle = np.array(points_chemin[0:index_d])
-        #             agregat_chemins[points_boucle[:, 0], points_boucle[:, 1]] = 0
-        #             # on supprime les points de la boucle arc precedent
-        #             index_d = points_chemin_precedent.index((d[0], d[1]))
-        #             if (index_d + 1) == len(points_chemin_precedent) - 1:
-        #                 points_boucle = np.array(points_chemin_precedent[-1])
-        #                 agregat_chemins[points_boucle[0], points_boucle[1]] = 0
-        #             else:
-        #                 points_boucle = np.array(points_chemin_precedent[index_d+1:-1])
-        #                 agregat_chemins[points_boucle[:, 0], points_boucle[:, 1]] = 0
-        #         except:
-        # #             pass
-        point_chemin = points_chemin[index_last_divergence:-1]
-    return agregat_chemins, points_chemin
-
-
-def nettoyage_liste_points(liste_chemin, chemin_clean):
-    """ nettoie la liste des points du chemin global selon le chemin raster clean """
-    liste_chemin_clean = liste_chemin.copy()
-    for p in liste_chemin:
-        if chemin_clean[p] == 0.:
-            liste_chemin_clean.remove(p)
-    return liste_chemin_clean
+    return agregat, points_agregat + points_chemin
 
 
 def nettoyage_intersection(chemin, liste_chemin, graph, ref):
