@@ -9,7 +9,6 @@ from osgeo import gdal
 import dynamo as dm
 import numpy as np
 
-
 from scipy import signal
 import geopandas as gpd
 from skimage.segmentation import flood_fill
@@ -132,62 +131,40 @@ if __name__ == "__main__":
     toc = time.perf_counter()
     verboseprint(f"{toc - tic}s")
 
-    # nettoyage avant/apres intersections graph
-
-    # tic = time.perf_counter()
-    # verboseprint("* Nettoyage des intersections avec le graph...")
-    REF = 1     # attention convention à respecter
-    # chemin_global, points_chemin_global = dm.nettoyage_intersection(chemin_global,
-    #                                                                 points_chemin_global,
-    #                                                                 graph, REF)
-    
-    # dm.export(chemin_global, outputpath+"chemin_global_"+str(k)+"_apres_nettoyage_intersection.tif",
-    #           img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)
-    # toc = time.perf_counter()
-    # verboseprint(f"{toc - tic}s")
-
     # graph final et ortho
 
     tic = time.perf_counter()
     verboseprint("* Calcul du graph/ortho final...")
 
     # on cherche les pts qui intersectent le graph
-
-    # filtre = np.ones((3, 3))
-    # res = signal.convolve2d(graph, filtre, mode='same', boundary='symm')
-    # contours = np.where(res != 9*graph, graph, 0)
-    # frontiere = np.where(contours == REF, 255., 0.)
-    # dm.export(frontiere, ARGS.outputpath+"frontiere.tif",
-    #           img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)
-    # index_intersection = []
-    # for index_point in range(len(points_chemin_global)):
-    #     point = points_chemin_global[index_point]
-    #     if frontiere[point] == 255:
-    #         index_intersection.append(index_point)
-
+    REF = 1    
+    filtre = np.ones((3, 3))
+    res = signal.convolve2d(graph, filtre, mode='same', boundary='symm')
+    contours = np.where(res != 9*graph, graph, 0)
+    frontiere = np.where(contours == REF, 255., 0.)
     index_intersection = []
     for index_point in range(len(points_chemin_global)):
         point = points_chemin_global[index_point]
-        if graph[point] == REF:
+        if frontiere[point] == 255:
             index_intersection.append(index_point)
-    # pour chaque portion d'intersection
+
     for inter in range(len(index_intersection)-1):
         idxA = index_intersection[inter]
         idxB = index_intersection[inter + 1]
         # on garde tous les points entre l'intersection A et B
         points_AB = points_chemin_global[idxA:idxB+1]
-        print(points_AB[0], points_AB[-1], len(points_AB))
         portion = np.zeros(chemin_global.shape)
         portion[np.array(points_AB)[:, 0], np.array(points_AB)[:, 1]] = 255.
         if len(points_AB) > 2 :
             # on construit le graph
-            label = graph[points_AB[0]]
-            print("ref = ", label)
+            label = graph[points_AB[int(len(points_AB)/2)]]
             new_graph = dm.remplir_par_diffusion(portion, graph,
                                             points_AB[0],
                                             points_AB[-1],
-                                            label)
+                                            (label==1)*2+(label==2)*1)
             graph = new_graph
+            # dm.export(graph, ARGS.outputpath+f"graph_{points_AB[0]}.tif",
+            #   img.GetGeoTransform(), img.GetProjection(), gdal.GDT_Byte)
 
     graph_final = graph
 
