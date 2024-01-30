@@ -141,10 +141,7 @@ if __name__ == "__main__":
     tic = time.perf_counter()
     verboseprint("* Calcul du graph/ortho final...")
     graph_final = dm.remplir_par_diffusion(chemin_global,
-                                           graph,
-                                           points_chemin_global[0],
-                                           points_chemin_global[-1],
-                                           REF)
+                                           graph)
     ortho = dm.construire_ortho(graph_final, ARGS.opi1, ARGS.opi2)
     toc = time.perf_counter()
     verboseprint(f"{toc - tic}s")
