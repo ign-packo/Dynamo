@@ -38,27 +38,17 @@ On agrège chaque nouveau tronçon au précédent. Si un point saisi n'est pas o
 
 ![cheminement global avec nettoyage](images/after_clean.png)
 
-## 5. Nettoyage du chemin en amont et aval des intersection avec le graph initial
+## 5. Construction du graph final (et de l'ortho)
 
-Pour opérer ce nettoyage on veut garder uniquement la plus grande portion de chemin global sans intersection avec le graph initial.
+Le graphe final est créé à partir d'une labélisation (la fonction `label` de `skimage`) du graphe initial
+sur lequel on a tracé le chemin. 
+Les zones en contact avec le bord (ou en contact avec les zones hors du graphe initial) conservent la valeur présente
+dans le graphe initial.
 
-Plus précisement : Dans la liste ordonnée du chemin global on récupère les index des points qui intersectent le graph (du côté de l'opi de ref). On veut les deux intersections voisines les plus éloignées l'une de l'autre donc l'écart d'index le plus grand entre deux intersections voisines.
+Pour les autres zones, on propage les valeurs de proche en proche (sans traverser la zone correspondant au 
+chemin).
 
-![intersection du cheminement global](images/intersection.png)
-
-## 6. Construction du graph final (et de l'ortho)
-
-Le graph final est rempli par diffusion de l'opi de référence jusqu'au nouveau chemin global de mosaïquage.
-Utilisation de la fonction `flood_fill` de `skimage` qui propage une valeur donnée sur toute une plage de pixels égaux à partir d'un pixel donnée (graine) (https://scikit-image.org/docs/stable/auto_examples/segmentation/plot_floodfill.html).
-
-![flood fill](images/flood_fill.png)
-
-Il faut trouver une graine de départ pour chaque zone entre le graph initial et le chemin global de mosaïquage :
-  1. Calcul de la frontière du graphe initial du côté de l'autre opi.
-  2. On souhaite la liste ordonnée des points sur cette frontière entre les points d'intersection du graph avec le chemin global de mosaïquage, pour cela on réutilise dijkstra : on passe les pixels sur cette frontière à 0 et le reste à 255, cette matrice sert de matrice de coût initial pour remonter la portion de graph initial avec dijkstra.
-  3. On obtient la liste ordonnée des possibles graines. Reste à appliquer itérativement la fonction flood_fill pour chaque graine qui n'appartiennent pas encore à l'opi de référence.
-
-  ![explication graines](images/explication_graines.png)
+A la fin, il ne reste que les pixels du chemin: on leur attribue le label maximal de leur voisinage (ça permet de gérer le cas des zones hors du graphe initial).
 
 L'ortho est construite en RVB à partir de ce graph avec l'opi de ref quand le graph indique 1, l'autre opi quand le graph indique 2.
 

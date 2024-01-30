@@ -9,7 +9,9 @@ import rasterio
 import numpy as np
 from scipy import signal
 import geopandas as gpd
-from skimage.segmentation import flood_fill
+# from skimage.segmentation import flood_fill
+from skimage.measure import label
+
 
 
 def calc_emprise(opi, start, end, marge):
@@ -260,32 +262,113 @@ def nettoyage_intersection(chemin, liste_chemin, graph, ref):
     return chemin, liste_chemin[idxA:idxB+1]
 
 
-def remplir_par_diffusion(chemin, graph, start, end, ref):
+# def remplir_par_diffusion(chemin, graph, start, end, ref):
+#     """
+#     propage l'opi de référence jusqu'au nouveau chemin de mosaiquage
+#     retourne le graph final
+#     """
+#     # calcul de la frontiere du graph initial du coté de l'autre opi
+#     filtre = np.ones((3, 3))
+#     res = signal.convolve2d(graph, filtre, mode='same', boundary='symm')
+#     contours = np.where(res != 9*graph, graph, 0)
+#     val_autre_opi = 2   # l'opi qui n'est pas la ref vaut par convention 2 mais test au cas ou
+#     if ref == 2:
+#         val_autre_opi = 1
+#     # frontiere sert de matrice de cout initial pour remonter le graph initial avec dijkstra
+#     # donc on met un cout nul sur toute la frontiere que l'on souhaite remonter
+#     frontiere = np.where(contours == val_autre_opi, 0., 255.)
+#     # récupération de la liste des graines avec dijkstra sur la portion de la
+#     # frontiere entre les deux intersections (start et end) du graph et du chemin
+#     cc_frontiere = dijkstra(frontiere, start, end, cout_min=1./256.)
+#     _, liste_graine = retour(np.copy(cc_frontiere), start, end)
+#     # remplissage pour les graines nécéssaires
+#     graph_final = np.where(chemin >= 255., ref, graph)
+#     for graine in liste_graine:
+#         if graph_final[graine] != ref:
+#             graph_final = flood_fill(graph_final, graine, ref, connectivity=1)
+#     return graph_final
+
+def remplir_par_diffusion(chemin, graph, verbose=False):
     """
     propage l'opi de référence jusqu'au nouveau chemin de mosaiquage
     retourne le graph final
     """
-    # calcul de la frontiere du graph initial du coté de l'autre opi
-    filtre = np.ones((3, 3))
-    res = signal.convolve2d(graph, filtre, mode='same', boundary='symm')
-    contours = np.where(res != 9*graph, graph, 0)
-    val_autre_opi = 2   # l'opi qui n'est pas la ref vaut par convention 2 mais test au cas ou
-    if ref == 2:
-        val_autre_opi = 1
-    # frontiere sert de matrice de cout initial pour remonter le graph initial avec dijkstra
-    # donc on met un cout nul sur toute la frontiere que l'on souhaite remonter
-    frontiere = np.where(contours == val_autre_opi, 0., 255.)
-    # récupération de la liste des graines avec dijkstra sur la portion de la
-    # frontiere entre les deux intersections (start et end) du graph et du chemin
-    cc_frontiere = dijkstra(frontiere, start, end, cout_min=1./256.)
-    _, liste_graine = retour(np.copy(cc_frontiere), start, end)
-    # remplissage pour les graines nécéssaires
-    graph_final = np.where(chemin >= 255., ref, graph)
-    for graine in liste_graine:
-        if graph_final[graine] != ref:
-            graph_final = flood_fill(graph_final, graine, ref, connectivity=1)
-    return graph_final
+    L=label(np.maximum(graph, chemin))
+    nb_labels=np.max(L)+1
 
+    bord=np.zeros(graph.shape)
+    bord[0,]=1
+    bord[-1,]=1
+    bord[:,0]=1
+    bord[:,-1]=1
+    bord[graph==0]=1
+
+    L_gauche=np.pad(L, 1,'edge')[1:-1, 0:-2]
+    L_droite=np.pad(L, 1,'edge')[1:-1, 2:  ]
+    L_haut=np.pad(L, 1,'edge')[0:-2, 1:-1]
+    L_bas=np.pad(L, 1,'edge')[2:  , 1:-1]
+
+    G={}
+    label_chemin=None
+    for i in range(nb_labels):
+        # la ou les valeurs dans le graphe initial pour cette zone (normalement une seule valeur, sauf pour la zone du chemin)
+        labels_graph_init=np.unique(graph[L==i])
+        if len(labels_graph_init) == 1:
+            l=labels_graph_init[0]
+            # on cherche les labels en contact (en 4c)
+            voisins = np.unique(np.concatenate((L_gauche[L==i], L_droite[L==i], L_haut[L==i], L_bas[L==i])))    
+            voisins = voisins[voisins!=i]
+            G[i]={'bord': 1. in bord[L == i], 'voisins': voisins, 'label_init': l, 'label': None}
+        else:
+            if label_chemin is not None:
+                print('Erreur, on avait deja un label pour le chemin')
+                exit(1)
+            label_chemin=i
+    if verbose:
+        print(G, label_chemin)
+
+    # nouvelle image du graphe
+    new_graph=np.zeros(graph.shape)
+    # on commence par labéliser les zones limites
+    # si la zone touche le bord (ou une zone hors du graphe initialement) elle n'est pas modifiée
+
+    nb_a_labeliser=len(G)
+    if verbose:
+        print("Nombre de zones a labeliser : ", nb_a_labeliser)
+    for i in range(nb_labels):
+        if i != label_chemin and G[i]['bord']:
+            new_graph[L==i]=graph[L==i]
+            G[i]['label']=G[i]['label_init']
+            if verbose:
+                print("region "+str(i)+" label: "+str(G[i]['label_init']))
+            nb_a_labeliser-=1
+
+    # tant que certaines zones ne sont pas labeliser
+    # on cherche les zones ayant un voisin labéliser 
+    while nb_a_labeliser>0:
+        for i in range(nb_labels):
+            if i != label_chemin and G[i]['label'] is None:
+                # on cherche un voisin avec un label
+                for v in G[i]['voisins']:
+                    if v != label_chemin:
+                        l=G[v]['label']
+                        if l is not None:
+                            new_graph[L==i]=l
+                            G[i]['label']=l
+                            if verbose:
+                                print("region "+str(i)+" label: "+str(l))
+                            nb_a_labeliser-=1
+                            break
+
+    # il ne reste plus que les pixels du chemin
+    # on peut leur attribut le label 1 ou 2 (on prend le voisin max pour éviter les zones à 0 (hors graphe))
+    ng_gauche=np.pad(new_graph, 1,'edge')[1:-1, 0:-2]
+    ng_droite=np.pad(new_graph, 1,'edge')[1:-1, 2:  ]
+    ng_haut=np.pad(new_graph, 1,'edge')[0:-2, 1:-1]
+    ng_bas=np.pad(new_graph, 1,'edge')[2:  , 1:-1]
+    masque_chemin=(L==label_chemin)
+    new_graph[masque_chemin]=np.maximum(np.maximum(ng_gauche,ng_droite),np.maximum(ng_haut,ng_bas))[masque_chemin]
+    return new_graph
 
 def construire_ortho(graph, opi_ref, opi2):
     """ Retourne l'ortho RVB finale construite à partir du graph final"""
